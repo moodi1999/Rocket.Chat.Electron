@@ -25,12 +25,12 @@ export const performElectronStartup = (): void => {
     return;
   }
 
-  const canStart = process.mas || app.requestSingleInstanceLock();
-
-  if (!canStart) {
-    app.exit();
-    return;
-  }
+  // const canStart = process.mas || app.requestSingleInstanceLock();
+  //
+  // if (!canStart) {
+  //   app.exit();
+  //   return;
+  // }
 
   if (args.includes('--disable-gpu')) {
     app.disableHardwareAcceleration();
