@@ -25,12 +25,12 @@ export const performElectronStartup = (): void => {
     return;
   }
 
-  const canStart = process.mas || app.requestSingleInstanceLock();
-
-  if (!canStart) {
-    app.exit();
-    return;
-  }
+  // const canStart = process.mas || app.requestSingleInstanceLock();
+  //
+  // if (!canStart) {
+  //   app.exit();
+  //   return;
+  // }
 
   if (args.includes('--disable-gpu')) {
     app.disableHardwareAcceleration();
@@ -41,17 +41,12 @@ export const performElectronStartup = (): void => {
 };
 
 export const setupApp = (): void => {
-  app.addListener('activate', () => {
-    const rootWindow = getRootWindow();
-    rootWindow.showInactive();
-    rootWindow.focus();
-  });
-
-  app.addListener('second-instance', () => {
-    const rootWindow = getRootWindow();
-
-    rootWindow.showInactive();
-    rootWindow.focus();
+  app.addListener('activate', async () => {
+    const browserWindow = await getRootWindow();
+    if (!browserWindow.isVisible()) {
+      browserWindow.showInactive();
+    }
+    browserWindow.focus();
   });
 
   app.addListener('window-all-closed', (): void => undefined);

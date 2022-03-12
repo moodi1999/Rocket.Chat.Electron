@@ -1,7 +1,11 @@
 import { dispatch, listen } from '../../store';
-import { WEBVIEW_MESSAGE_BOX_FOCUSED, WEBVIEW_MESSAGE_BOX_BLURRED, TOUCH_BAR_FORMAT_BUTTON_TOUCHED } from '../actions';
+import {
+  WEBVIEW_MESSAGE_BOX_FOCUSED,
+  WEBVIEW_MESSAGE_BOX_BLURRED,
+  TOUCH_BAR_FORMAT_BUTTON_TOUCHED,
+} from '../actions';
 
-let focusedMessageBoxInput: Element = null;
+let focusedMessageBoxInput: Element | null = null;
 
 const handleFocusEvent = (event: FocusEvent): void => {
   if (!(event.target instanceof Element)) {
@@ -37,8 +41,11 @@ export const listenToMessageBoxEvents = (): void => {
 
     const { payload: buttonId } = action;
 
-    const button = document.querySelector<HTMLButtonElement>(`[data-id='${ buttonId }']`);
-    button.click();
+    const ancestor = focusedMessageBoxInput.closest('.rc-message-box');
+    const button = ancestor?.querySelector<HTMLButtonElement>(
+      `[data-id='${buttonId}']`
+    );
+    button?.click();
   });
 
   document.addEventListener('focus', handleFocusEvent, true);

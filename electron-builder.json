@@ -4,7 +4,6 @@
     "package.json"
   ],
   "extraResources": [
-    "dictionaries/**/*",
     "build/icon.ico",
     "servers.json"
   ],
@@ -18,7 +17,7 @@
       "mas"
     ],
     "icon": "build/icon.icns",
-    "bundleVersion": "72",
+    "bundleVersion": "82",
     "helperBundleId": "chat.rocket.electron.helper",
     "type": "distribution",
     "artifactName": "rocketchat-${version}.${ext}",
@@ -62,10 +61,11 @@
   "win": {
     "target": [
       "nsis",
-      "msi"
+      "msi",
+      "zip"
     ],
     "icon": "build/icon.ico",
-    "publisherName": "Sectigo RSA Code Signing CA",
+    "publisherName": "Rocket.Chat Technologies Corp.",
     "legalTrademarks": "",
     "verifyUpdateCodeSignature": true,
     "requestedExecutionLevel": "asInvoker",
@@ -150,6 +150,7 @@
     ]
   },
   "afterSign": "./build/notarize.js",
+  "generateUpdatesFilesForAllChannels": true,
   "publish": [
     {
       "provider": "github",

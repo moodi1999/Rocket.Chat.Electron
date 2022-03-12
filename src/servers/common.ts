@@ -9,6 +9,7 @@ export type Server = {
   };
   lastPath?: string;
   failed?: boolean;
+  webContentsId?: number;
 };
 
 export const enum ServerUrlResolutionStatus {
@@ -18,11 +19,31 @@ export const enum ServerUrlResolutionStatus {
   INVALID = 'invalid',
 }
 
-export type ServerUrlResolutionResult = (
-  [resolvedServerUrl: string, result: ServerUrlResolutionStatus.OK]
+export type ServerUrlResolutionResult =
+  | [resolvedServerUrl: Server['url'], result: ServerUrlResolutionStatus.OK]
   | [
-    resolvedServerUrl: string,
-    result: Exclude<ServerUrlResolutionStatus, 'OK'>,
-    error: Error,
-  ]
-);
+      resolvedServerUrl: Server['url'],
+      result: Exclude<ServerUrlResolutionStatus, 'OK'>,
+      error: Error
+    ];
+
+export const isServerUrlResolutionResult = (
+  obj: unknown
+): obj is ServerUrlResolutionResult => {
+  if (!Array.isArray(obj)) {
+    return false;
+  }
+  return (
+    (obj.length === 3 &&
+      typeof obj[0] === 'string' &&
+      [
+        ServerUrlResolutionStatus.INVALID,
+        ServerUrlResolutionStatus.INVALID_URL,
+        ServerUrlResolutionStatus.TIMEOUT,
+      ].includes(obj[1]) &&
+      typeof obj[2] === 'object') ||
+    (obj.length === 2 &&
+      typeof obj[0] === 'string' &&
+      obj[1] === ServerUrlResolutionStatus.OK)
+  );
+};

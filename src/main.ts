@@ -1,16 +1,17 @@
 import { app } from 'electron';
+import electronDl from 'electron-dl';
 
 import { performElectronStartup, setupApp } from './app/main/app';
 import {
-  getLocalStorage,
   mergePersistableValues,
-  purgeLocalStorage,
   watchAndPersistChanges,
 } from './app/main/data';
 import { setUserDataDirectory } from './app/main/dev';
 import { setupDeepLinks, processDeepLinksInArgs } from './deepLinks/main';
+import { setupDownloads } from './downloads/main';
 import { setupMainErrorHandling } from './errors';
 import i18n from './i18n/main';
+import { handleDesktopCapturerGetSources } from './jitsi/ipc';
 import { setupNavigation } from './navigation/main';
 import { setupNotifications } from './notifications/main';
 import { setupScreenSharing } from './screenSharing/main';
@@ -21,53 +22,56 @@ import dock from './ui/main/dock';
 import menuBar from './ui/main/menuBar';
 import {
   createRootWindow,
-  applyRootWindowState,
   showRootWindow,
+  exportLocalStorage,
 } from './ui/main/rootWindow';
+import { attachGuestWebContentsEvents } from './ui/main/serverView';
 import touchBar from './ui/main/touchBar';
 import trayIcon from './ui/main/trayIcon';
-import { attachGuestWebContentsEvents } from './ui/main/webviews';
 import { setupUpdates } from './updates/main';
 import { setupPowerMonitor } from './userPresence/main';
 
+electronDl({ saveAs: true });
+
 const start = async (): Promise<void> => {
   setUserDataDirectory();
-  setupMainErrorHandling();
-  performElectronStartup();
 
-  createMainReduxStore();
+  performElectronStartup();
 
   await app.whenReady();
 
-  i18n.setUp();
+  createMainReduxStore();
 
+  const localStorage = await exportLocalStorage();
+  await mergePersistableValues(localStorage);
+  await setupServers(localStorage);
+
+  i18n.setUp();
   await i18n.wait();
 
-  const rootWindow = createRootWindow();
+  setupApp();
 
-  attachGuestWebContentsEvents(rootWindow);
+  setupMainErrorHandling();
 
-  await showRootWindow(rootWindow);
+  createRootWindow();
+  attachGuestWebContentsEvents();
+  await showRootWindow();
 
   // React DevTools is currently incompatible with Electron 10
   // if (process.env.NODE_ENV === 'development') {
   //   installDevTools();
   // }
 
-  setupApp();
   setupNotifications();
   setupScreenSharing();
 
-  const localStorage = await getLocalStorage();
-
-  await mergePersistableValues(localStorage);
-  await setupServers(localStorage);
   await setupSpellChecking();
 
   setupDeepLinks();
   await setupNavigation();
   setupPowerMonitor();
   await setupUpdates();
+  setupDownloads();
 
   dock.setUp();
   menuBar.setUp();
@@ -81,10 +85,9 @@ const start = async (): Promise<void> => {
     trayIcon.tearDown();
   });
 
-  applyRootWindowState();
-
-  await purgeLocalStorage();
   watchAndPersistChanges();
+
+  handleDesktopCapturerGetSources();
 
   await processDeepLinksInArgs();
 };

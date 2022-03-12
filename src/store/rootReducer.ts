@@ -2,17 +2,20 @@ import { combineReducers } from 'redux';
 
 import { appPath } from '../app/reducers/appPath';
 import { appVersion } from '../app/reducers/appVersion';
+import { downloads } from '../downloads/reducers/downloads';
+import { allowedJitsiServers } from '../jitsi/reducers';
 import {
   clientCertificates,
   externalProtocols,
   trustedCertificates,
 } from '../navigation/reducers';
-import {
-  currentServerUrl,
-  servers,
-} from '../servers/reducers';
+import { servers } from '../servers/reducers';
+import { currentView } from '../ui/reducers/currentView';
+import { isFlashFrameEnabled } from '../ui/reducers/isFlashFrameEnabled';
+import { isInternalVideoChatWindowEnabled } from '../ui/reducers/isInternalVideoChatWindowEnabled';
 import { isMenuBarEnabled } from '../ui/reducers/isMenuBarEnabled';
 import { isMessageBoxFocused } from '../ui/reducers/isMessageBoxFocused';
+import { isReportEnabled } from '../ui/reducers/isReportEnabled';
 import { isShowWindowOnUnreadChangedEnabled } from '../ui/reducers/isShowWindowOnUnreadChangedEnabled';
 import { isSideBarEnabled } from '../ui/reducers/isSideBarEnabled';
 import { isTrayIconEnabled } from '../ui/reducers/isTrayIconEnabled';
@@ -30,12 +33,14 @@ import {
   updateError,
 } from '../updates/reducers';
 
-const reducersMap = {
+export const rootReducer = combineReducers({
+  allowedJitsiServers,
   appPath,
   appVersion,
   clientCertificates,
-  currentServerUrl,
+  currentView,
   doCheckForUpdatesOnStartup,
+  downloads,
   externalProtocols,
   isCheckingForUpdates,
   isEachUpdatesSettingConfigurable,
@@ -54,8 +59,9 @@ const reducersMap = {
   skippedUpdateVersion,
   trustedCertificates,
   updateError,
-};
-
-export const rootReducer = combineReducers<typeof reducersMap>(reducersMap);
+  isReportEnabled,
+  isFlashFrameEnabled,
+  isInternalVideoChatWindowEnabled,
+});
 
 export type RootState = ReturnType<typeof rootReducer>;

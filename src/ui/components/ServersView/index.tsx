@@ -1,21 +1,23 @@
 import React, { FC } from 'react';
-import { useSelector } from 'react-redux';
 
-import { RootState } from '../../../store/rootReducer';
+import { useServers } from '../hooks/useServers';
 import { ReparentingContainer } from '../utils/ReparentingContainer';
 import { ServerPane } from './ServerPane';
 
 export const ServersView: FC = () => {
-  const servers = useSelector(({ servers }: RootState) => servers);
-  const currentServerUrl = useSelector(({ currentServerUrl }: RootState) => currentServerUrl);
+  const servers = useServers();
 
-  return <ReparentingContainer>
-    {servers.map((server) => <ServerPane
-      key={server.url}
-      lastPath={server.lastPath}
-      serverUrl={server.url}
-      isSelected={currentServerUrl === server.url}
-      isFailed={server.failed}
-    />)}
-  </ReparentingContainer>;
+  return (
+    <ReparentingContainer>
+      {servers.map((server) => (
+        <ServerPane
+          key={server.url}
+          lastPath={server.lastPath}
+          serverUrl={server.url}
+          isSelected={server.selected}
+          isFailed={server.failed ?? false}
+        />
+      ))}
+    </ReparentingContainer>
+  );
 };

@@ -3,15 +3,15 @@ import { URL } from 'url';
 import { app, WebContents } from 'electron';
 
 import { ServerUrlResolutionStatus } from '../servers/common';
-import { normalizeServerUrl, resolveServerUrl } from '../servers/main';
+import { resolveServerUrl } from '../servers/main';
 import { select, dispatch } from '../store';
-import { askForServerAddition, warnAboutInvalidServerUrl } from '../ui/main/dialogs';
-import { getRootWindow } from '../ui/main/rootWindow';
-import { getWebContentsByServerUrl } from '../ui/main/webviews';
 import {
-  DEEP_LINKS_SERVER_FOCUSED,
-  DEEP_LINKS_SERVER_ADDED,
-} from './actions';
+  askForServerAddition,
+  warnAboutInvalidServerUrl,
+} from '../ui/main/dialogs';
+import { getRootWindow } from '../ui/main/rootWindow';
+import { getWebContentsByServerUrl } from '../ui/main/serverView';
+import { DEEP_LINKS_SERVER_FOCUSED, DEEP_LINKS_SERVER_ADDED } from './actions';
 
 const isRocketChatUrl = (parsedUrl: URL): boolean =>
   parsedUrl.protocol === 'rocketchat:';
@@ -19,18 +19,31 @@ const isRocketChatUrl = (parsedUrl: URL): boolean =>
 const isGoRocketChatUrl = (parsedUrl: URL): boolean =>
   parsedUrl.protocol === 'https:' && parsedUrl.hostname === 'go.rocket.chat';
 
-const parseDeepLink = (deepLink: string): { action: string, args: URLSearchParams } => {
-  const parsedUrl = new URL(deepLink);
+const parseDeepLink = (
+  input: string
+): { action: string; args: URLSearchParams } | null => {
+  if (/^--/.test(input)) {
+    // input is a CLI flag
+    return null;
+  }
 
-  if (isRocketChatUrl(parsedUrl)) {
-    const action = parsedUrl.hostname;
-    const args = parsedUrl.searchParams;
+  let url: URL;
+
+  try {
+    url = new URL(input);
+  } catch (error) {
+    return null;
+  }
+
+  if (isRocketChatUrl(url)) {
+    const action = url.hostname;
+    const args = url.searchParams;
     return { action, args };
   }
 
-  if (isGoRocketChatUrl(parsedUrl)) {
-    const action = parsedUrl.pathname;
-    const args = parsedUrl.searchParams;
+  if (isGoRocketChatUrl(url)) {
+    const action = url.pathname;
+    const args = url.searchParams;
     return { action, args };
   }
 
@@ -47,26 +60,28 @@ type AuthenticationParams = {
 
 type OpenRoomParams = {
   host: string;
-  rid: string;
   path?: string;
 };
 
 type InviteParams = {
   host: string;
-  rid: string;
   path: string;
 };
 
-const performOnServer = async (url: string, action: (serverUrl: string) => Promise<void>): Promise<void> => {
-  let serverUrl: string;
+const performOnServer = async (
+  url: string,
+  action: (serverUrl: string) => Promise<void>
+): Promise<void> => {
+  const [serverUrl, status, error] = await resolveServerUrl(url);
 
-  try {
-    serverUrl = normalizeServerUrl(url);
-  } catch (error) {
+  if (status !== ServerUrlResolutionStatus.OK) {
+    await warnAboutInvalidServerUrl(serverUrl, error?.message ?? '');
     return;
   }
 
-  const isServerAdded = select(({ servers }) => servers.some((server) => server.url === serverUrl));
+  const isServerAdded = select(({ servers }) =>
+    servers.some((server) => server.url === serverUrl)
+  );
 
   if (isServerAdded) {
     dispatch({ type: DEEP_LINKS_SERVER_FOCUSED, payload: serverUrl });
@@ -80,18 +95,11 @@ const performOnServer = async (url: string, action: (serverUrl: string) => Promi
     return;
   }
 
-  const [normalizedServerUrl, result, error] = await resolveServerUrl(serverUrl);
-
-  if (result !== ServerUrlResolutionStatus.OK) {
-    await warnAboutInvalidServerUrl(normalizedServerUrl, error.message);
-    return;
-  }
-
   dispatch({
     type: DEEP_LINKS_SERVER_ADDED,
-    payload: normalizedServerUrl,
+    payload: serverUrl,
   });
-  await action(normalizedServerUrl);
+  await action(serverUrl);
 };
 
 const getWebContents = (serverUrl: string): Promise<WebContents> =>
@@ -109,37 +117,38 @@ const getWebContents = (serverUrl: string): Promise<WebContents> =>
     poll();
   });
 
-const performAuthentication = async ({ host, token, userId }: AuthenticationParams): Promise<void> =>
+const performAuthentication = async ({
+  host,
+  token,
+  userId,
+}: AuthenticationParams): Promise<void> =>
   performOnServer(host, async (serverUrl) => {
-    if (!token) {
-      return;
-    }
-
     const url = new URL('home', serverUrl);
     url.searchParams.append('resumeToken', token);
     url.searchParams.append('userId', userId);
 
     const webContents = await getWebContents(serverUrl);
-    console.log(url.href);
     webContents.loadURL(url.href);
   });
 
+// https://developer.rocket.chat/rocket.chat/deeplink#channel-group-dm
 const performOpenRoom = async ({ host, path }: OpenRoomParams): Promise<void> =>
   performOnServer(host, async (serverUrl) => {
     if (!path) {
       return;
     }
-
+    if (!/^\/?(direct|group|channel|livechat)\/[0-9a-zA-Z-_.]+/.test(path)) {
+      return;
+    }
     const webContents = await getWebContents(serverUrl);
     webContents.loadURL(new URL(path, serverUrl).href);
   });
 
 const performInvite = async ({ host, path }: InviteParams): Promise<void> =>
   performOnServer(host, async (serverUrl) => {
-    if (!path || !/^invite\//.test(path)) {
+    if (!/^invite\//.test(path)) {
       return;
     }
-
     const webContents = await getWebContents(serverUrl);
     webContents.loadURL(new URL(path, serverUrl).href);
   });
@@ -155,26 +164,30 @@ const processDeepLink = async (deepLink: string): Promise<void> => {
 
   switch (action) {
     case 'auth': {
-      const host = args.get('host');
-      const token = args.get('token');
-      const userId = args.get('userId');
-      await performAuthentication({ host, token, userId });
+      const host = args.get('host') ?? undefined;
+      const token = args.get('token') ?? undefined;
+      const userId = args.get('userId') ?? undefined;
+      if (host && token && userId) {
+        await performAuthentication({ host, token, userId });
+      }
       break;
     }
 
     case 'room': {
-      const host = args.get('host');
-      const path = args.get('path');
-      const rid = args.get('rid');
-      await performOpenRoom({ host, path, rid });
+      const host = args.get('host') ?? undefined;
+      const path = args.get('path') ?? undefined;
+      if (host && path) {
+        await performOpenRoom({ host, path });
+      }
       break;
     }
 
     case 'invite': {
-      const host = args.get('host');
-      const path = args.get('path');
-      const rid = args.get('rid');
-      await performInvite({ host, path, rid });
+      const host = args.get('host') ?? undefined;
+      const path = args.get('path') ?? undefined;
+      if (host && path) {
+        await performInvite({ host, path });
+      }
     }
   }
 };
@@ -183,7 +196,12 @@ export const setupDeepLinks = (): void => {
   app.addListener('open-url', async (event, url): Promise<void> => {
     event.preventDefault();
 
-    getRootWindow().show();
+    const browserWindow = await getRootWindow();
+
+    if (!browserWindow.isVisible()) {
+      browserWindow.showInactive();
+    }
+    browserWindow.focus();
 
     await processDeepLink(url);
   });
@@ -191,7 +209,12 @@ export const setupDeepLinks = (): void => {
   app.addListener('second-instance', async (event, argv): Promise<void> => {
     event.preventDefault();
 
-    getRootWindow().show();
+    const browserWindow = await getRootWindow();
+
+    if (browserWindow && !browserWindow.isVisible()) {
+      browserWindow.showInactive();
+    }
+    if (browserWindow) browserWindow.focus();
 
     const args = argv.slice(app.isPackaged ? 1 : 2);
 

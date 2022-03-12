@@ -1,25 +1,29 @@
-import { WebContents, ipcMain, ipcRenderer } from 'electron';
+import { WebContents } from 'electron';
 import { Middleware, MiddlewareAPI, Dispatch } from 'redux';
 
-import { isFSA, FluxStandardAction } from './fsa';
-
-const enum ReduxIpcChannel {
-  GET_INITIAL_STATE = 'redux/get-initial-state',
-  ACTION_DISPATCHED = 'redux/action-dispatched',
-}
+import { handle as handleOnMain, invoke as invokeFromMain } from '../ipc/main';
+import {
+  handle as handleFromRenderer,
+  invoke as invokeFromRenderer,
+} from '../ipc/renderer';
+import {
+  isFSA,
+  FluxStandardAction,
+  isLocallyScoped,
+  hasMeta,
+  isSingleScoped,
+} from './fsa';
 
 const enum ActionScope {
   LOCAL = 'local',
+  SINGLE = 'single',
 }
 
 export const forwardToRenderers: Middleware = (api: MiddlewareAPI) => {
   const renderers = new Set<WebContents>();
 
-  ipcMain.handle(ReduxIpcChannel.GET_INITIAL_STATE, (event) => {
-    const webContents = event.sender;
-
+  handleOnMain('redux/get-initial-state', async (webContents) => {
     renderers.add(webContents);
-
     webContents.addListener('destroyed', () => {
       renderers.delete(webContents);
     });
@@ -27,29 +31,45 @@ export const forwardToRenderers: Middleware = (api: MiddlewareAPI) => {
     return api.getState();
   });
 
-  ipcMain.addListener(ReduxIpcChannel.ACTION_DISPATCHED, (_event, action) => {
-    api.dispatch(action);
+  handleOnMain('redux/action-dispatched', async (webContents, action) => {
+    api.dispatch({
+      ...action,
+      ipcMeta: {
+        webContentsId: webContents.id,
+        ...(webContents.hostWebContents?.id && {
+          viewInstanceId: webContents.hostWebContents?.id,
+        }),
+        ...action.ipcMeta,
+      },
+    });
   });
 
   return (next: Dispatch) => (action: FluxStandardAction<string, unknown>) => {
-    if (!isFSA(action)) {
+    if (!isFSA(action) || isLocallyScoped(action)) {
       return next(action);
     }
-
-    if (action.meta && action.meta.scope === ActionScope.LOCAL) {
-      return next(action);
-    }
-
-    const rendererAction: FluxStandardAction<string, unknown> = {
+    const rendererAction = {
       ...action,
       meta: {
-        ...action.meta,
+        ...(hasMeta(action) && action.meta),
         scope: ActionScope.LOCAL,
       },
     };
-
+    if (isSingleScoped(action)) {
+      const { webContentsId, viewInstanceId } = action.ipcMeta;
+      [...renderers]
+        .filter(
+          (w) =>
+            w.id === webContentsId ||
+            (viewInstanceId && w.id === viewInstanceId)
+        )
+        .forEach((w) =>
+          invokeFromMain(w, 'redux/action-dispatched', rendererAction)
+        );
+      return next(action);
+    }
     renderers.forEach((webContents) => {
-      webContents.send(ReduxIpcChannel.ACTION_DISPATCHED, rendererAction);
+      invokeFromMain(webContents, 'redux/action-dispatched', rendererAction);
     });
 
     return next(action);
@@ -57,23 +77,19 @@ export const forwardToRenderers: Middleware = (api: MiddlewareAPI) => {
 };
 
 export const getInitialState = (): Promise<any> =>
-  ipcRenderer.invoke(ReduxIpcChannel.GET_INITIAL_STATE);
+  invokeFromRenderer('redux/get-initial-state');
 
 export const forwardToMain: Middleware = (api: MiddlewareAPI) => {
-  ipcRenderer.addListener(ReduxIpcChannel.ACTION_DISPATCHED, (_event, action) => {
+  handleFromRenderer('redux/action-dispatched', async (action) => {
     api.dispatch(action);
   });
 
   return (next: Dispatch) => (action: FluxStandardAction<string, unknown>) => {
-    if (!isFSA(action)) {
+    if (!isFSA(action) || isLocallyScoped(action)) {
       return next(action);
     }
 
-    if (action.meta && action.meta.scope === ActionScope.LOCAL) {
-      return next(action);
-    }
-
-    ipcRenderer.send(ReduxIpcChannel.ACTION_DISPATCHED, action);
+    invokeFromRenderer('redux/action-dispatched', action);
     return action;
   };
 };

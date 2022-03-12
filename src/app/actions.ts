@@ -1,22 +1,4 @@
-import {
-  externalProtocols,
-  trustedCertificates,
-} from '../navigation/reducers';
-import {
-  currentServerUrl,
-  servers,
-} from '../servers/reducers';
-import { isMenuBarEnabled } from '../ui/reducers/isMenuBarEnabled';
-import { isShowWindowOnUnreadChangedEnabled } from '../ui/reducers/isShowWindowOnUnreadChangedEnabled';
-import { isSideBarEnabled } from '../ui/reducers/isSideBarEnabled';
-import { isTrayIconEnabled } from '../ui/reducers/isTrayIconEnabled';
-import { rootWindowState } from '../ui/reducers/rootWindowState';
-import {
-  doCheckForUpdatesOnStartup,
-  isEachUpdatesSettingConfigurable,
-  isUpdatingEnabled,
-  skippedUpdateVersion,
-} from '../updates/reducers';
+import { PersistableValues } from './PersistableValues';
 
 export const APP_ERROR_THROWN = 'app/error-thrown';
 export const APP_PATH_SET = 'app/path-set';
@@ -27,19 +9,5 @@ export type AppActionTypeToPayloadMap = {
   [APP_ERROR_THROWN]: Error;
   [APP_PATH_SET]: string;
   [APP_VERSION_SET]: string;
-  [APP_SETTINGS_LOADED]: {
-    currentServerUrl: ReturnType<typeof currentServerUrl>;
-    doCheckForUpdatesOnStartup: ReturnType<typeof doCheckForUpdatesOnStartup>;
-    externalProtocols: ReturnType<typeof externalProtocols>;
-    isEachUpdatesSettingConfigurable: ReturnType<typeof isEachUpdatesSettingConfigurable>;
-    isMenuBarEnabled: ReturnType<typeof isMenuBarEnabled>;
-    isShowWindowOnUnreadChangedEnabled: ReturnType<typeof isShowWindowOnUnreadChangedEnabled>;
-    isSideBarEnabled: ReturnType<typeof isSideBarEnabled>;
-    isTrayIconEnabled: ReturnType<typeof isTrayIconEnabled>;
-    isUpdatingEnabled: ReturnType<typeof isUpdatingEnabled>;
-    rootWindowState: ReturnType<typeof rootWindowState>;
-    servers: ReturnType<typeof servers>;
-    skippedUpdateVersion: ReturnType<typeof skippedUpdateVersion>;
-    trustedCertificates: ReturnType<typeof trustedCertificates>;
-  };
+  [APP_SETTINGS_LOADED]: Partial<PersistableValues>;
 };

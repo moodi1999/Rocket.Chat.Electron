@@ -1,4 +1,4 @@
-import { session } from 'electron';
+import { app, session, webContents } from 'electron';
 
 import { listen } from '../store';
 import {
@@ -6,18 +6,37 @@ import {
   SPELL_CHECKING_TOGGLED,
 } from './actions';
 
+const setSpellCheckerLanguages = async (
+  languages: Set<string>
+): Promise<void> => {
+  await app.whenReady();
+
+  const filteredLanguages = Array.from(languages).filter((language) =>
+    session.defaultSession.availableSpellCheckerLanguages.includes(language)
+  );
+
+  session.defaultSession.setSpellCheckerLanguages(filteredLanguages);
+  webContents.getAllWebContents().forEach((webContents) => {
+    webContents.session.setSpellCheckerLanguages(filteredLanguages);
+  });
+};
+
 export const setupSpellChecking = async (): Promise<void> => {
-  const spellCheckerLanguages = session.defaultSession.getSpellCheckerLanguages();
-  session.fromPartition('persist:rocketchat-server').setSpellCheckerLanguages(spellCheckerLanguages);
+  setSpellCheckerLanguages(
+    new Set(session.defaultSession.getSpellCheckerLanguages())
+  );
 
   listen(SPELL_CHECKING_TOGGLED, (action) => {
-    const spellCheckerLanguages = action.payload ? session.defaultSession.getSpellCheckerLanguages() : [];
-    session.defaultSession.setSpellCheckerLanguages(spellCheckerLanguages);
-    session.fromPartition('persist:rocketchat-server').setSpellCheckerLanguages(spellCheckerLanguages);
+    const spellCheckerLanguages = new Set(
+      action.payload ? session.defaultSession.getSpellCheckerLanguages() : []
+    );
+    setSpellCheckerLanguages(spellCheckerLanguages);
   });
 
   listen(SPELL_CHECKING_LANGUAGE_TOGGLED, (action) => {
-    const spellCheckerLanguages = new Set(session.defaultSession.getSpellCheckerLanguages());
+    const spellCheckerLanguages = new Set(
+      session.defaultSession.getSpellCheckerLanguages()
+    );
 
     if (action.payload.enabled) {
       spellCheckerLanguages.add(action.payload.name);
@@ -25,7 +44,6 @@ export const setupSpellChecking = async (): Promise<void> => {
       spellCheckerLanguages.delete(action.payload.name);
     }
 
-    session.defaultSession.setSpellCheckerLanguages(Array.from(spellCheckerLanguages));
-    session.fromPartition('persist:rocketchat-server').setSpellCheckerLanguages(Array.from(spellCheckerLanguages));
+    setSpellCheckerLanguages(spellCheckerLanguages);
   });
 };

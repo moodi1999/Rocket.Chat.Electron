@@ -1,12 +1,8 @@
 import { powerMonitor } from 'electron';
 
-import { dispatch, listen } from '../store';
-import {
-  SYSTEM_SUSPENDING,
-  SYSTEM_LOCKING_SCREEN,
-  SYSTEM_IDLE_STATE_REQUESTED,
-  SYSTEM_IDLE_STATE_RESPONDED,
-} from './actions';
+import { handle } from '../ipc/main';
+import { dispatch } from '../store';
+import { SYSTEM_SUSPENDING, SYSTEM_LOCKING_SCREEN } from './actions';
 
 export const setupPowerMonitor = (): void => {
   powerMonitor.addListener('suspend', () => {
@@ -17,14 +13,9 @@ export const setupPowerMonitor = (): void => {
     dispatch({ type: SYSTEM_LOCKING_SCREEN });
   });
 
-  listen(SYSTEM_IDLE_STATE_REQUESTED, (action) => {
-    dispatch({
-      type: SYSTEM_IDLE_STATE_RESPONDED,
-      payload: powerMonitor.getSystemIdleState(action.payload),
-      meta: {
-        response: true,
-        id: action.meta?.id,
-      },
-    });
-  });
+  handle(
+    'power-monitor/get-system-idle-state',
+    async (_webContents, idleThreshold) =>
+      powerMonitor.getSystemIdleState(idleThreshold)
+  );
 };

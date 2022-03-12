@@ -6,7 +6,10 @@ import { autoUpdater } from 'electron-updater';
 
 import { listen, dispatch, select } from '../store';
 import { RootState } from '../store/rootReducer';
-import { UPDATE_DIALOG_SKIP_UPDATE_CLICKED, UPDATE_DIALOG_INSTALL_BUTTON_CLICKED } from '../ui/actions';
+import {
+  UPDATE_DIALOG_SKIP_UPDATE_CLICKED,
+  UPDATE_DIALOG_INSTALL_BUTTON_CLICKED,
+} from '../ui/actions';
 import {
   askUpdateInstall,
   AskUpdateInstallResponse,
@@ -23,76 +26,120 @@ import {
   UPDATES_NEW_VERSION_NOT_AVAILABLE,
   UPDATES_READY,
 } from './actions';
-import { UpdateConfiguration } from './common';
+import {
+  AppLevelUpdateConfiguration,
+  UpdateConfiguration,
+  UserLevelUpdateConfiguration,
+} from './common';
 
-const loadAppConfiguration = async (): Promise<Record<string, unknown>> => {
+const readJsonObject = async (
+  filePath: string
+): Promise<Record<string, unknown>> => {
   try {
-    const filePath = path.join(
-      app.getAppPath(),
-      app.getAppPath().endsWith('app.asar') ? '..' : '.',
-      'update.json',
-    );
     const content = await fs.promises.readFile(filePath, 'utf8');
     const json = JSON.parse(content);
 
-    return json && typeof json === 'object' ? json : {};
+    return json && typeof json === 'object' && !Array.isArray(json) ? json : {};
   } catch (error) {
     return {};
   }
 };
 
-const loadUserConfiguration = async (): Promise<Record<string, unknown>> => {
-  try {
-    const filePath = path.join(app.getPath('userData'), 'update.json');
-    const content = await fs.promises.readFile(filePath, 'utf8');
-    const json = JSON.parse(content);
-    await fs.promises.unlink(filePath);
-
-    return json && typeof json === 'object' ? json : {};
-  } catch (error) {
-    return {};
-  }
+const readAppJsonObject = async (
+  basename: string
+): Promise<Record<string, unknown>> => {
+  const filePath = path.join(
+    app.getAppPath(),
+    app.getAppPath().endsWith('app.asar') ? '..' : '.',
+    basename
+  );
+  return readJsonObject(filePath);
 };
 
-const loadConfiguration = async (): Promise<UpdateConfiguration> => {
-  const defaultConfiguration = select(({
-    isEachUpdatesSettingConfigurable,
-    isUpdatingEnabled,
-    doCheckForUpdatesOnStartup,
-    skippedUpdateVersion,
-  }: RootState) => ({
-    isUpdatingAllowed:
-      (process.platform === 'linux' && !!process.env.APPIMAGE)
-        || (process.platform === 'win32' && !process.windowsStore)
-        || (process.platform === 'darwin' && !process.mas),
-    isEachUpdatesSettingConfigurable,
-    isUpdatingEnabled,
-    doCheckForUpdatesOnStartup,
-    skippedUpdateVersion,
-  }));
-  const appConfiguration = await loadAppConfiguration();
+const readUserJsonObject = async (
+  basename: string
+): Promise<Record<string, unknown>> => {
+  const filePath = path.join(app.getPath('userData'), basename);
+  return readJsonObject(filePath);
+};
 
+const loadAppConfiguration = async (): Promise<AppLevelUpdateConfiguration> =>
+  readAppJsonObject('update.json');
+
+const loadUserConfiguration = async (): Promise<UserLevelUpdateConfiguration> =>
+  readUserJsonObject('update.json');
+
+export const mergeConfigurations = (
+  defaultConfiguration: UpdateConfiguration,
+  appConfiguration: AppLevelUpdateConfiguration,
+  userConfiguration: UserLevelUpdateConfiguration
+): UpdateConfiguration => {
   const configuration = {
     ...defaultConfiguration,
-    ...appConfiguration.forced ? { isEachUpdatesSettingConfigurable: false } : {},
-    ...appConfiguration.canUpdate ? { doCheckForUpdatesOnStartup: true } : {},
-    ...appConfiguration.autoUpdate ? { doCheckForUpdatesOnStartup: true } : {},
-    ...appConfiguration.skip ? { skippedUpdateVersion: String(appConfiguration.skip) } : {},
+    ...(typeof appConfiguration.forced === 'boolean' && {
+      isEachUpdatesSettingConfigurable: !appConfiguration.forced,
+    }),
+    ...(typeof appConfiguration.canUpdate === 'boolean' && {
+      isUpdatingEnabled: appConfiguration.canUpdate,
+    }),
+    ...(typeof appConfiguration.autoUpdate === 'boolean' && {
+      doCheckForUpdatesOnStartup: appConfiguration.autoUpdate,
+    }),
+    ...(typeof appConfiguration.skip === 'string' && {
+      skippedUpdateVersion: appConfiguration.skip,
+    }),
   };
 
-  if (configuration.isEachUpdatesSettingConfigurable) {
-    const userConfiguration = await loadUserConfiguration();
+  if (
+    typeof userConfiguration.autoUpdate === 'boolean' &&
+    (configuration.isEachUpdatesSettingConfigurable ||
+      typeof appConfiguration.autoUpdate === 'undefined')
+  ) {
+    configuration.doCheckForUpdatesOnStartup = userConfiguration.autoUpdate;
+  }
 
-    if (userConfiguration.autoUpdate) {
-      configuration.doCheckForUpdatesOnStartup = true;
-    }
-
-    if (userConfiguration.skip) {
-      configuration.skippedUpdateVersion = String(userConfiguration.skip);
-    }
+  if (
+    typeof userConfiguration.skip === 'string' &&
+    (configuration.isEachUpdatesSettingConfigurable ||
+      typeof appConfiguration.skip === 'undefined')
+  ) {
+    configuration.skippedUpdateVersion = userConfiguration.skip;
   }
 
   return configuration;
+};
+
+const loadConfiguration = async (): Promise<UpdateConfiguration> => {
+  const defaultConfiguration = select(
+    ({
+      isUpdatingEnabled,
+      doCheckForUpdatesOnStartup,
+      skippedUpdateVersion,
+      isReportEnabled,
+      isFlashFrameEnabled,
+      isInternalVideoChatWindowEnabled,
+    }: RootState) => ({
+      isUpdatingAllowed:
+        (process.platform === 'linux' && !!process.env.APPIMAGE) ||
+        (process.platform === 'win32' && !process.windowsStore) ||
+        (process.platform === 'darwin' && !process.mas),
+      isEachUpdatesSettingConfigurable: true,
+      isUpdatingEnabled,
+      doCheckForUpdatesOnStartup,
+      skippedUpdateVersion,
+      isReportEnabled,
+      isFlashFrameEnabled,
+      isInternalVideoChatWindowEnabled,
+    })
+  );
+  const appConfiguration = await loadAppConfiguration();
+  const userConfiguration = await loadUserConfiguration();
+
+  return mergeConfigurations(
+    defaultConfiguration,
+    appConfiguration,
+    userConfiguration
+  );
 };
 
 export const setupUpdates = async (): Promise<void> => {
@@ -104,6 +151,9 @@ export const setupUpdates = async (): Promise<void> => {
     isUpdatingEnabled,
     doCheckForUpdatesOnStartup,
     skippedUpdateVersion,
+    isReportEnabled,
+    isFlashFrameEnabled,
+    isInternalVideoChatWindowEnabled,
   } = await loadConfiguration();
 
   dispatch({
@@ -114,6 +164,9 @@ export const setupUpdates = async (): Promise<void> => {
       isUpdatingEnabled,
       doCheckForUpdatesOnStartup,
       skippedUpdateVersion,
+      isReportEnabled,
+      isFlashFrameEnabled,
+      isInternalVideoChatWindowEnabled,
     },
   });
 
@@ -126,7 +179,9 @@ export const setupUpdates = async (): Promise<void> => {
   });
 
   autoUpdater.addListener('update-available', ({ version }) => {
-    const skippedUpdateVersion = select(({ skippedUpdateVersion }) => skippedUpdateVersion);
+    const skippedUpdateVersion = select(
+      ({ skippedUpdateVersion }) => skippedUpdateVersion
+    );
     if (skippedUpdateVersion === version) {
       dispatch({ type: UPDATES_NEW_VERSION_NOT_AVAILABLE });
       return;
@@ -154,14 +209,15 @@ export const setupUpdates = async (): Promise<void> => {
       app.removeAllListeners('window-all-closed');
       autoUpdater.quitAndInstall(true, true);
     } catch (error) {
-      dispatch({
-        type: UPDATES_ERROR_THROWN,
-        payload: {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
-        },
-      });
+      error instanceof Error &&
+        dispatch({
+          type: UPDATES_ERROR_THROWN,
+          payload: {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+          },
+        });
     }
   });
 
@@ -180,14 +236,15 @@ export const setupUpdates = async (): Promise<void> => {
     try {
       await autoUpdater.checkForUpdates();
     } catch (error) {
-      dispatch({
-        type: UPDATES_ERROR_THROWN,
-        payload: {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
-        },
-      });
+      error instanceof Error &&
+        dispatch({
+          type: UPDATES_ERROR_THROWN,
+          payload: {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+          },
+        });
     }
   }
 
@@ -195,14 +252,15 @@ export const setupUpdates = async (): Promise<void> => {
     try {
       await autoUpdater.checkForUpdates();
     } catch (error) {
-      dispatch({
-        type: UPDATES_ERROR_THROWN,
-        payload: {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
-        },
-      });
+      error instanceof Error &&
+        dispatch({
+          type: UPDATES_ERROR_THROWN,
+          payload: {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+          },
+        });
     }
   });
 
@@ -220,14 +278,15 @@ export const setupUpdates = async (): Promise<void> => {
     try {
       autoUpdater.downloadUpdate();
     } catch (error) {
-      dispatch({
-        type: UPDATES_ERROR_THROWN,
-        payload: {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
-        },
-      });
+      error instanceof Error &&
+        dispatch({
+          type: UPDATES_ERROR_THROWN,
+          payload: {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+          },
+        });
     }
   });
 };

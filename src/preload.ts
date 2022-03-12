@@ -1,19 +1,16 @@
-import fs from 'fs';
-import path from 'path';
+import { contextBridge, webFrame } from 'electron';
 
-import { contextBridge, ipcRenderer, webFrame } from 'electron';
-import { satisfies, coerce } from 'semver';
-
-import { setupRendererErrorHandling } from './errors';
+import { invoke } from './ipc/renderer';
 import { JitsiMeetElectron, JitsiMeetElectronAPI } from './jitsi/preload';
 import { listenToNotificationsRequests } from './notifications/preload';
 import { listenToScreenSharingRequests } from './screenSharing/preload';
-import { RocketChatDesktop, RocketChatDesktopAPI, serverInfo } from './servers/preload/api';
+import { RocketChatDesktop, RocketChatDesktopAPI } from './servers/preload/api';
 import { setServerUrl } from './servers/preload/urls';
-import { createRendererReduxStore, select } from './store';
+import { createRendererReduxStore, listen } from './store';
+import { WEBVIEW_DID_NAVIGATE } from './ui/actions';
+import { debounce } from './ui/main/debounce';
 import { listenToMessageBoxEvents } from './ui/preload/messageBox';
 import { handleTrafficLightsSpacing } from './ui/preload/sidebar';
-import { listenToUserPresenceChanges } from './userPresence/preload';
 import { whenReady } from './whenReady';
 
 declare global {
@@ -24,33 +21,43 @@ declare global {
 }
 
 contextBridge.exposeInMainWorld('JitsiMeetElectron', JitsiMeetElectron);
-contextBridge.exposeInMainWorld('RocketChatDesktop', RocketChatDesktop);
 
 const start = async (): Promise<void> => {
-  const serverUrl = await ipcRenderer.invoke('server-url');
-  setServerUrl(serverUrl);
+  const serverUrl = await invoke('server-view/get-url');
 
-  await createRendererReduxStore();
-
-  await whenReady();
-
-  setupRendererErrorHandling('webviewPreload');
-
-  const injectedCode = await fs.promises.readFile(
-    path.join(select(({ appPath }) => appPath), 'app/injected.js'),
-    'utf8',
-  );
-  await webFrame.executeJavaScript(injectedCode);
-
-  if (!satisfies(coerce(serverInfo?.version), '>=3.0.x')) {
+  if (!serverUrl) {
     return;
   }
 
-  listenToNotificationsRequests();
-  listenToScreenSharingRequests();
-  listenToUserPresenceChanges();
-  listenToMessageBoxEvents();
-  handleTrafficLightsSpacing();
+  window.removeEventListener('load', start);
+
+  contextBridge.exposeInMainWorld('RocketChatDesktop', RocketChatDesktop);
+
+  setServerUrl(serverUrl);
+
+  await whenReady();
+
+  await createRendererReduxStore();
+
+  await invoke('server-view/ready');
+
+  RocketChatDesktop.onReady(() => {
+    listen(
+      WEBVIEW_DID_NAVIGATE,
+      debounce(() => {
+        const resources = webFrame.getResourceUsage();
+        // TODO: make this configurable
+        if (resources.images.size > 50 * 1024 * 1024) {
+          webFrame.clearCache();
+        }
+      }, 1000 * 30)
+    );
+
+    listenToNotificationsRequests();
+    listenToScreenSharingRequests();
+    listenToMessageBoxEvents();
+    handleTrafficLightsSpacing();
+  });
 };
 
-start();
+window.addEventListener('load', start);

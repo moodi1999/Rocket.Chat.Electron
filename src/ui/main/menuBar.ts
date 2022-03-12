@@ -1,4 +1,10 @@
-import { Menu, app, shell, MenuItemConstructorOptions } from 'electron';
+import {
+  Menu,
+  app,
+  shell,
+  MenuItemConstructorOptions,
+  BrowserWindow,
+} from 'electron';
 import i18next from 'i18next';
 import { createSelector, createStructuredSelector } from 'reselect';
 
@@ -9,23 +15,24 @@ import { RootState } from '../../store/rootReducer';
 import {
   MENU_BAR_ABOUT_CLICKED,
   MENU_BAR_ADD_NEW_SERVER_CLICKED,
-  MENU_BAR_TOGGLE_IS_TRAY_ICON_ENABLED_CLICKED,
-  MENU_BAR_TOGGLE_IS_MENU_BAR_ENABLED_CLICKED,
-  MENU_BAR_TOGGLE_IS_SIDE_BAR_ENABLED_CLICKED,
   MENU_BAR_SELECT_SERVER_CLICKED,
+  MENU_BAR_TOGGLE_IS_MENU_BAR_ENABLED_CLICKED,
   MENU_BAR_TOGGLE_IS_SHOW_WINDOW_ON_UNREAD_CHANGED_ENABLED_CLICKED,
+  MENU_BAR_TOGGLE_IS_SIDE_BAR_ENABLED_CLICKED,
+  MENU_BAR_TOGGLE_IS_TRAY_ICON_ENABLED_CLICKED,
+  SIDE_BAR_DOWNLOADS_BUTTON_CLICKED,
+  SIDE_BAR_SETTINGS_BUTTON_CLICKED,
 } from '../actions';
 import { askForAppDataReset } from './dialogs';
 import { getRootWindow } from './rootWindow';
-import { getAllServerWebContents, getWebContentsByServerUrl } from './webviews';
+import { getWebContentsByServerUrl } from './serverView';
 
 const t = i18next.t.bind(i18next);
 
 const on = (
   condition: boolean,
-  getMenuItems: () => MenuItemConstructorOptions[],
-): MenuItemConstructorOptions[] =>
-  (condition ? getMenuItems() : []);
+  getMenuItems: () => MenuItemConstructorOptions[]
+): MenuItemConstructorOptions[] => (condition ? getMenuItems() : []);
 
 const createAppMenu = createSelector(
   () => undefined,
@@ -37,8 +44,13 @@ const createAppMenu = createSelector(
         {
           id: 'about',
           label: t('menus.about', { appName: app.name }),
-          click: () => {
-            getRootWindow().show();
+          click: async () => {
+            const browserWindow = await getRootWindow();
+
+            if (!browserWindow.isVisible()) {
+              browserWindow.showInactive();
+            }
+            browserWindow.focus();
             dispatch({ type: MENU_BAR_ABOUT_CLICKED });
           },
         },
@@ -71,8 +83,13 @@ const createAppMenu = createSelector(
           id: 'addNewServer',
           label: t('menus.addNewServer'),
           accelerator: 'CommandOrControl+N',
-          click: () => {
-            getRootWindow().show();
+          click: async () => {
+            const browserWindow = await getRootWindow();
+
+            if (!browserWindow.isVisible()) {
+              browserWindow.showInactive();
+            }
+            browserWindow.focus();
             dispatch({ type: MENU_BAR_ADD_NEW_SERVER_CLICKED });
           },
         },
@@ -96,7 +113,7 @@ const createAppMenu = createSelector(
         },
       },
     ],
-  }),
+  })
 );
 
 const createEditMenu = createSelector(
@@ -137,21 +154,31 @@ const createEditMenu = createSelector(
         role: 'selectAll',
       },
     ],
-  }),
+  })
 );
 
-const selectViewDeps = createStructuredSelector({
-  currentServerUrl: ({ currentServerUrl }: RootState) => currentServerUrl,
-  isSideBarEnabled: ({ isSideBarEnabled }: RootState) => isSideBarEnabled,
-  isTrayIconEnabled: ({ isTrayIconEnabled }: RootState) => isTrayIconEnabled,
-  isMenuBarEnabled: ({ isMenuBarEnabled }: RootState) => isMenuBarEnabled,
-  rootWindowState: ({ rootWindowState }: RootState) => rootWindowState,
+const selectViewDeps = createStructuredSelector<
+  RootState,
+  Pick<
+    RootState,
+    | 'currentView'
+    | 'isSideBarEnabled'
+    | 'isTrayIconEnabled'
+    | 'isMenuBarEnabled'
+    | 'rootWindowState'
+  >
+>({
+  currentView: ({ currentView }) => currentView,
+  isSideBarEnabled: ({ isSideBarEnabled }) => isSideBarEnabled,
+  isTrayIconEnabled: ({ isTrayIconEnabled }) => isTrayIconEnabled,
+  isMenuBarEnabled: ({ isMenuBarEnabled }) => isMenuBarEnabled,
+  rootWindowState: ({ rootWindowState }) => rootWindowState,
 });
 
 const createViewMenu = createSelector(
   selectViewDeps,
   ({
-    currentServerUrl,
+    currentView,
     isSideBarEnabled,
     isTrayIconEnabled,
     isMenuBarEnabled,
@@ -164,54 +191,94 @@ const createViewMenu = createSelector(
         id: 'reload',
         label: t('menus.reload'),
         accelerator: 'CommandOrControl+R',
-        enabled: !!currentServerUrl,
-        click: () => {
-          getRootWindow().show();
-          const guestWebContents = getWebContentsByServerUrl(currentServerUrl);
-          guestWebContents.reload();
+        enabled: typeof currentView === 'object' && !!currentView.url,
+        click: async () => {
+          const browserWindow = await getRootWindow();
+
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
+          const guestWebContents =
+            typeof currentView === 'object'
+              ? getWebContentsByServerUrl(currentView.url)
+              : null;
+          guestWebContents?.reload();
         },
       },
       {
         id: 'reloadIgnoringCache',
         label: t('menus.reloadIgnoringCache'),
-        enabled: !!currentServerUrl,
-        click: () => {
-          getRootWindow().show();
-          const guestWebContents = getWebContentsByServerUrl(currentServerUrl);
-          guestWebContents.reloadIgnoringCache();
+        enabled: typeof currentView === 'object' && !!currentView.url,
+        click: async () => {
+          const browserWindow = await getRootWindow();
+
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
+          const guestWebContents =
+            typeof currentView === 'object'
+              ? getWebContentsByServerUrl(currentView.url)
+              : null;
+          guestWebContents?.reloadIgnoringCache();
         },
       },
       {
         id: 'openDevTools',
         label: t('menus.openDevTools'),
-        enabled: !!currentServerUrl,
-        accelerator: process.platform === 'darwin' ? 'Command+Alt+I' : 'Ctrl+Shift+I',
+        enabled: typeof currentView === 'object' && !!currentView.url,
+        accelerator:
+          process.platform === 'darwin' ? 'Command+Alt+I' : 'Ctrl+Shift+I',
         click: () => {
-          const guestWebContents = getWebContentsByServerUrl(currentServerUrl);
-          guestWebContents.toggleDevTools();
+          // const guestWebContents =
+          //   typeof currentView === 'object'
+          //     ? getWebContentsByServerUrl(currentView.url)
+          //     : null;
+          // guestWebContents?.toggleDevTools();
+          const windows = BrowserWindow.getAllWindows();
+          windows.forEach((window) => {
+            window.webContents.toggleDevTools();
+          });
         },
       },
       { type: 'separator' },
       {
         id: 'back',
         label: t('menus.back'),
-        enabled: !!currentServerUrl,
+        enabled: typeof currentView === 'object' && !!currentView.url,
         accelerator: process.platform === 'darwin' ? 'Command+[' : 'Alt+Left',
-        click: () => {
-          getRootWindow().show();
-          const guestWebContents = getWebContentsByServerUrl(currentServerUrl);
-          guestWebContents.goBack();
+        click: async () => {
+          const browserWindow = await getRootWindow();
+
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
+          const guestWebContents =
+            typeof currentView === 'object'
+              ? getWebContentsByServerUrl(currentView.url)
+              : null;
+          guestWebContents?.goBack();
         },
       },
       {
         id: 'forward',
         label: t('menus.forward'),
-        enabled: !!currentServerUrl,
+        enabled: typeof currentView === 'object' && !!currentView.url,
         accelerator: process.platform === 'darwin' ? 'Command+]' : 'Alt+Right',
-        click: () => {
-          getRootWindow().show();
-          const guestWebContents = getWebContentsByServerUrl(currentServerUrl);
-          guestWebContents.goForward();
+        click: async () => {
+          const browserWindow = await getRootWindow();
+
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
+          const guestWebContents =
+            typeof currentView === 'object'
+              ? getWebContentsByServerUrl(currentView.url)
+              : null;
+          guestWebContents?.goForward();
         },
       },
       { type: 'separator' },
@@ -232,11 +299,16 @@ const createViewMenu = createSelector(
           id: 'showFullScreen',
           label: t('menus.showFullScreen'),
           type: 'checkbox',
-          checked: rootWindowState.visible,
+          checked: rootWindowState.fullscreen,
           accelerator: 'Control+Command+F',
-          click: ({ checked: enabled }) => {
-            getRootWindow().show();
-            getRootWindow().setFullScreen(enabled);
+          click: async ({ checked: enabled }) => {
+            const browserWindow = await getRootWindow();
+
+            if (!browserWindow.isVisible()) {
+              browserWindow.showInactive();
+            }
+            browserWindow.focus();
+            browserWindow.setFullScreen(enabled);
           },
         },
       ]),
@@ -246,8 +318,13 @@ const createViewMenu = createSelector(
           label: t('menus.showMenuBar'),
           type: 'checkbox',
           checked: isMenuBarEnabled,
-          click: ({ checked }) => {
-            getRootWindow().show();
+          click: async ({ checked }) => {
+            const browserWindow = await getRootWindow();
+
+            if (!browserWindow.isVisible()) {
+              browserWindow.showInactive();
+            }
+            browserWindow.focus();
             dispatch({
               type: MENU_BAR_TOGGLE_IS_MENU_BAR_ENABLED_CLICKED,
               payload: checked,
@@ -260,8 +337,13 @@ const createViewMenu = createSelector(
         label: t('menus.showServerList'),
         type: 'checkbox',
         checked: isSideBarEnabled,
-        click: ({ checked }) => {
-          getRootWindow().show();
+        click: async ({ checked }) => {
+          const browserWindow = await getRootWindow();
+
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
           dispatch({
             type: MENU_BAR_TOGGLE_IS_SIDE_BAR_ENABLED_CLICKED,
             payload: checked,
@@ -273,50 +355,98 @@ const createViewMenu = createSelector(
         id: 'resetZoom',
         label: t('menus.resetZoom'),
         accelerator: 'CommandOrControl+0',
-        click: () => {
-          getRootWindow().show();
-          getRootWindow().webContents.zoomLevel = 0;
+        click: async () => {
+          const browserWindow = await getRootWindow();
+
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
+          const url = typeof currentView === 'object' ? currentView.url : null;
+          if (!url) {
+            return;
+          }
+          const guestWebContents = getWebContentsByServerUrl(url);
+          guestWebContents?.setZoomLevel(0);
         },
       },
       {
         id: 'zoomIn',
         label: t('menus.zoomIn'),
         accelerator: 'CommandOrControl+Plus',
-        click: () => {
-          getRootWindow().show();
-          if (getRootWindow().webContents.zoomLevel >= 9) {
+        click: async () => {
+          const browserWindow = await getRootWindow();
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
+          const url = typeof currentView === 'object' ? currentView.url : null;
+          if (!url) {
             return;
           }
-          getRootWindow().webContents.zoomLevel++;
+          const guestWebContents = getWebContentsByServerUrl(url);
+          if (!guestWebContents) {
+            return;
+          }
+          const zoomLevel = guestWebContents?.getZoomLevel();
+          if (zoomLevel >= 9) {
+            return;
+          }
+
+          guestWebContents.setZoomLevel(zoomLevel + 1);
         },
       },
       {
         id: 'zoomOut',
         label: t('menus.zoomOut'),
         accelerator: 'CommandOrControl+-',
-        click: () => {
-          getRootWindow().show();
-          if (getRootWindow().webContents.zoomLevel <= -9) {
+        click: async () => {
+          const browserWindow = await getRootWindow();
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
+          const url = typeof currentView === 'object' ? currentView.url : null;
+          if (!url) {
             return;
           }
-          getRootWindow().webContents.zoomLevel--;
+
+          const guestWebContents = getWebContentsByServerUrl(url);
+          if (!guestWebContents) {
+            return;
+          }
+
+          const zoomLevel = guestWebContents.getZoomLevel();
+          if (zoomLevel <= -9) {
+            return;
+          }
+
+          guestWebContents.setZoomLevel(zoomLevel - 1);
         },
       },
     ],
-  }),
+  })
 );
 
-const selectWindowDeps = createStructuredSelector({
-  servers: ({ servers }:RootState) => servers,
-  currentServerUrl: ({ currentServerUrl }:RootState) => currentServerUrl,
-  isShowWindowOnUnreadChangedEnabled: ({ isShowWindowOnUnreadChangedEnabled }:RootState) => isShowWindowOnUnreadChangedEnabled,
+const selectWindowDeps = createStructuredSelector<
+  RootState,
+  Pick<
+    RootState,
+    'servers' | 'currentView' | 'isShowWindowOnUnreadChangedEnabled'
+  >
+>({
+  servers: ({ servers }) => servers,
+  currentView: ({ currentView }) => currentView,
+  isShowWindowOnUnreadChangedEnabled: ({
+    isShowWindowOnUnreadChangedEnabled,
+  }) => isShowWindowOnUnreadChangedEnabled,
 });
 
 const createWindowMenu = createSelector(
   selectWindowDeps,
   ({
     servers,
-    currentServerUrl,
+    currentView,
     isShowWindowOnUnreadChangedEnabled,
   }): MenuItemConstructorOptions => ({
     id: 'windowMenu',
@@ -328,37 +458,88 @@ const createWindowMenu = createSelector(
           id: 'addNewServer',
           label: t('menus.addNewServer'),
           accelerator: 'CommandOrControl+N',
-          click: () => {
-            getRootWindow().show();
+          click: async () => {
+            const browserWindow = await getRootWindow();
+
+            if (!browserWindow.isVisible()) {
+              browserWindow.showInactive();
+            }
+            browserWindow.focus();
             dispatch({ type: MENU_BAR_ADD_NEW_SERVER_CLICKED });
           },
         },
         { type: 'separator' },
       ]),
       ...on(servers.length > 0, () => [
-        ...servers.map((server, i): MenuItemConstructorOptions => ({
-          id: server.url,
-          type: currentServerUrl ? 'checkbox' : 'normal',
-          label: server.title.replace(/&/g, '&&'),
-          checked: currentServerUrl === server.url,
-          accelerator: `CommandOrControl+${ i + 1 }`,
-          click: () => {
-            getRootWindow().show();
-            dispatch({
-              type: MENU_BAR_SELECT_SERVER_CLICKED,
-              payload: server.url,
-            });
-          },
-        })),
+        ...servers.map(
+          (server, i): MenuItemConstructorOptions => ({
+            id: server.url,
+            type:
+              typeof currentView === 'object' && currentView.url === server.url
+                ? 'checkbox'
+                : 'normal',
+            label: server.title?.replace(/&/g, '&&'),
+            checked:
+              typeof currentView === 'object' && currentView.url === server.url,
+            accelerator: `CommandOrControl+${i + 1}`,
+            click: async () => {
+              const browserWindow = await getRootWindow();
+
+              if (!browserWindow.isVisible()) {
+                browserWindow.showInactive();
+              }
+              browserWindow.focus();
+              dispatch({
+                type: MENU_BAR_SELECT_SERVER_CLICKED,
+                payload: server.url,
+              });
+            },
+          })
+        ),
         { type: 'separator' },
       ]),
+      {
+        id: 'downloads',
+        label: t('menus.downloads'),
+        checked: currentView === 'downloads',
+        accelerator: 'CommandOrControl+D',
+        click: async () => {
+          const browserWindow = await getRootWindow();
+
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
+          dispatch({ type: SIDE_BAR_DOWNLOADS_BUTTON_CLICKED });
+        },
+      },
+      {
+        id: 'settings',
+        label: t('menus.settings'),
+        checked: currentView === 'settings',
+        accelerator: 'CommandOrControl+I',
+        click: async () => {
+          const browserWindow = await getRootWindow();
+
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
+          dispatch({ type: SIDE_BAR_SETTINGS_BUTTON_CLICKED });
+        },
+      },
       {
         id: 'showOnUnreadMessage',
         type: 'checkbox',
         label: t('menus.showOnUnreadMessage'),
         checked: isShowWindowOnUnreadChangedEnabled,
-        click: ({ checked }) => {
-          getRootWindow().show();
+        click: async ({ checked }) => {
+          const browserWindow = await getRootWindow();
+
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
           dispatch({
             type: MENU_BAR_TOGGLE_IS_SHOW_WINDOW_ON_UNREAD_CHANGED_ENABLED_CLICKED,
             payload: checked,
@@ -379,7 +560,7 @@ const createWindowMenu = createSelector(
         accelerator: 'CommandOrControl+W',
       },
     ],
-  }),
+  })
 );
 
 const createHelpMenu = createSelector(
@@ -400,7 +581,9 @@ const createHelpMenu = createSelector(
         id: 'reportIssue',
         label: t('menus.reportIssue'),
         click: () => {
-          shell.openExternal('https://github.com/RocketChat/Rocket.Chat/issues/new');
+          shell.openExternal(
+            'https://github.com/RocketChat/Rocket.Chat/issues/new'
+          );
         },
       },
       { type: 'separator' },
@@ -408,29 +591,42 @@ const createHelpMenu = createSelector(
         id: 'reload-window',
         label: t('menus.reload'),
         accelerator: 'CommandOrControl+Shift+R',
-        click: () => {
-          getRootWindow().show();
-          getRootWindow().reload();
+        click: async () => {
+          const browserWindow = await getRootWindow();
+
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
+          browserWindow.webContents.reload();
         },
       },
       {
         id: 'toggleDevTools',
         label: t('menus.toggleDevTools'),
-        click: () => {
-          getRootWindow().show();
-          getRootWindow().webContents.toggleDevTools();
+        accelerator: 'CommandOrControl+Shift+D',
+        click: async () => {
+          const browserWindow = await getRootWindow();
+
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
+          browserWindow.webContents.toggleDevTools();
         },
       },
       { type: 'separator' },
       {
         id: 'clearTrustedCertificates',
         label: t('menus.clearTrustedCertificates'),
-        click: () => {
-          getRootWindow().show();
+        click: async () => {
+          const browserWindow = await getRootWindow();
+
+          if (!browserWindow.isVisible()) {
+            browserWindow.showInactive();
+          }
+          browserWindow.focus();
           dispatch({ type: CERTIFICATES_CLEARED });
-          getAllServerWebContents().forEach((webContents) => {
-            webContents.reloadIgnoringCache();
-          });
         },
       },
       {
@@ -456,32 +652,40 @@ const createHelpMenu = createSelector(
         {
           id: 'about',
           label: t('menus.about', { appName: app.name }),
-          click: () => {
-            getRootWindow().show();
+          click: async () => {
+            const browserWindow = await getRootWindow();
+
+            if (!browserWindow.isVisible()) {
+              browserWindow.showInactive();
+            }
+            browserWindow.focus();
             dispatch({ type: MENU_BAR_ABOUT_CLICKED });
           },
         },
       ]),
     ],
-  }),
+  })
 );
 
-const selectMenuBarTemplate = createSelector([
-  createAppMenu,
-  createEditMenu,
-  createViewMenu,
-  createWindowMenu,
-  createHelpMenu,
-], (...menus) => menus);
+const selectMenuBarTemplate = createSelector(
+  [
+    createAppMenu,
+    createEditMenu,
+    createViewMenu,
+    createWindowMenu,
+    createHelpMenu,
+  ],
+  (...menus) => menus
+);
 
 const selectMenuBarTemplateAsJson = createSelector(
   selectMenuBarTemplate,
-  (template: unknown) => JSON.stringify(template),
+  (template: unknown) => JSON.stringify(template)
 );
 
 class MenuBarService extends Service {
   protected initialize(): void {
-    this.watch(selectMenuBarTemplateAsJson, () => {
+    this.watch(selectMenuBarTemplateAsJson, async () => {
       const menuBarTemplate = select(selectMenuBarTemplate);
       const menu = Menu.buildFromTemplate(menuBarTemplate);
 
@@ -491,7 +695,7 @@ class MenuBarService extends Service {
       }
 
       Menu.setApplicationMenu(null);
-      getRootWindow().setMenu(menu);
+      (await getRootWindow()).setMenu(menu);
     });
   }
 }

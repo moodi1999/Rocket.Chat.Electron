@@ -6,13 +6,15 @@
     "selectAll": "Öss&zes kijelölése",
     "undo": "&Visszavonás",
     "redo": "&Ismétlés",
+    "spelling": "Helyesírás",
     "spellingLanguages": "Helyesírás-ellenőrzés nyelvei",
     "moreSpellingSuggestions": "Több helyesírási javaslat",
     "noSpellingSuggestions": "Nincsenek javaslatok",
     "copyLinkAddress": "Hivatkozás címének másolása",
     "copyLinkText": "Hivatkozás szövegének másolása",
     "openLink": "Hivatkozás megnyitása",
-    "saveImageAs": "Kép mentése másként…"
+    "saveImageAs": "Kép mentése másként…",
+    "copyImage": "Kép másolása"
   },
   "dialog": {
     "about": {
@@ -37,6 +39,12 @@
     "certificateError": {
       "title": "Tanúsítványhiba",
       "message": "Megbízik a(z) „{{- issuerName}}” által kiadott tanúsítványban?",
+      "yes": "Igen",
+      "no": "Nem"
+    },
+    "downloadRemoval": {
+      "title": "Biztos benne?",
+      "message": "Eltávolítja ezt a letöltést?",
       "yes": "Igen",
       "no": "Nem"
     },
@@ -85,6 +93,66 @@
       "announcement": "Tanúsítvány kiválasztása",
       "select": "Kiválasztás",
       "validDates": "Érvényes {{-validStart,}} és {{-validExpiry,}} között"
+    },
+    "openingExternalProtocol": {
+      "title": "Hivatkozás egyéni protokollal",
+      "message": "A(z) {{- protocol }} hivatkozás külső alkalmazást igényel.",
+      "detail": "A kért hivatkozás: {{- url }} . Szeretné folytatni?",
+      "dontAskAgain": "Mindig a hozzárendelt alkalmazásban nyissa meg az ilyen típusú hivatkozásokat",
+      "yes": "Igen",
+      "no": "Nem"
+    }
+  },
+  "downloads": {
+    "title": "Letöltések",
+    "filters": {
+      "search": "Keresés",
+      "server": "Kiszolgáló",
+      "mimeType": "Típus",
+      "status": "Állapot",
+      "clear": "Szűrők törlése",
+      "all": "Összes",
+      "mimes": {
+        "images": "Képek",
+        "videos": "Videók",
+        "audios": "Hangok",
+        "texts": "Szövegek",
+        "files": "Fájlok"
+      },
+      "statuses": {
+        "paused": "Szüneteltetve",
+        "cancelled": "Megszakítva"
+      }
+    },
+    "item": {
+      "cancel": "Mégse",
+      "copyLink": "Hivatkozás másolása",
+      "errored": "Letöltés megszakítva",
+      "pause": "Szüneteltetés",
+      "progressSize": "{{receivedBytes, byteSize}} / {{totalBytes, byteSize}} ({{ratio, percentage}})",
+      "remove": "Eltávolítás a listáról",
+      "resume": "Folytatás",
+      "retry": "Újrapróbálás",
+      "showInFolder": "Megjelenítés mappában"
+    },
+    "showingResults": "Eredmények megjelenítése: {{first}} - {{last}} / {{count}}"
+  },
+  "settings": {
+    "title": "Beállítások",
+    "options": {
+      "report": {
+        "title": "Hibák jelentése a fejlesztőknek",
+        "description": "A hibák névtelenül történő jelentése a fejlesztőknek. A megosztott információk az alkalmazás verziószámát, az operációs rendszer típusát, a kiszolgáló URL-ét, az eszköz nyelvét és a hiba típusát tartalmazzák. Tartalom vagy felhasználónevek nem kerülnek megosztásra."
+      },
+      "flashFrame": {
+        "title": "Keret villogtatásának engedélyezése",
+        "description": "Villogtatja az ablakot, hogy felhívja a felhasználó figyelmét.",
+        "onLinux": "Egyes Linux disztribúciók nem támogatják ezt a funkciót."
+      },
+      "internalVideoChatWindow": {
+        "title": "Videocsevegés megnyitása alkalmazásablak használatával",
+        "description": "Ha be van állítva, akkor a videocsevegés egy alkalmazás ablakával nyílik meg, egyébként az alapértelmezett böngésző lesz használva."
+      }
     }
   },
   "error": {
@@ -108,7 +176,10 @@
     "close": "Bezárás",
     "copy": "&Másolás",
     "cut": "&Kivágás",
+    "disableGpu": "GPU letiltása",
     "documentation": "Dokumentáció",
+    "downloads": "Letöltések",
+    "settings": "Beállítások",
     "editMenu": "S&zerkesztés",
     "fileMenu": "&Fájl",
     "forward": "&Előre",
@@ -148,15 +219,19 @@
   },
   "selfxss": {
     "title": "Megállj!",
-    "description": "Ez a böngészőfunkció fejlesztők számára készült. Ha valaki azt mondja, hogy másoljon le és illesszen be valamit ide, azért hogy egy Rocket.Chat funkciót engedélyezzen vagy feltörje valaki más fiókját, akkor az átverés, és hozzáférést fog adni nekik az Ön Rocket.Chat fiókjához.",
+    "description": "Ez a böngészőfunkció fejlesztők számára készült. Ha valaki azt mondja, hogy másoljon le és illesszen be valamit ide, azért hogy egy Rocket.Chat funkciót engedélyezzen vagy „feltörje” valaki más fiókját, akkor az átverés, és hozzáférést fog adni nekik az Ön Rocket.Chat fiókjához.",
     "moreInfo": "További információkért nézze meg a https://go.rocket.chat/i/xss oldalt."
   },
   "sidebar": {
     "addNewServer": "Új kiszolgáló hozzáadása",
+    "downloads": "Letöltések",
+    "settings": "Beállítások",
     "item": {
       "reload": "Kiszolgáló újratöltése",
       "remove": "Kiszolgáló eltávolítása",
-      "openDevTools": "Fejlesztői eszközök megnyitása"
+      "openDevTools": "Fejlesztői eszközök megnyitása",
+      "clearCache": "Gyorsítótár törlése",
+      "clearStorageData": "Tárolóadatok törlése"
     }
   },
   "touchBar": {

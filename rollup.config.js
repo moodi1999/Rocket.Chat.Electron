@@ -13,7 +13,8 @@ import copy from 'rollup-plugin-copy';
 import appManifest from './package.json';
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const canRun = process.env.ROLLUP_WATCH === 'true' && process.env.NO_RUN !== 'true';
+const canRun =
+  process.env.ROLLUP_WATCH === 'true' && process.env.NO_RUN !== 'true';
 
 const run = () => {
   if (!canRun) {
@@ -29,7 +30,9 @@ const run = () => {
         await new Promise((resolve) => proc.on('close', resolve));
       }
 
-      console.log(proc ? 'Restarting main process...' : 'Starting main process...');
+      console.log(
+        proc ? 'Restarting main process...' : 'Starting main process...'
+      );
 
       proc = spawn(electron, ['.'], { stdio: 'inherit' });
 
@@ -40,6 +43,11 @@ const run = () => {
   };
 };
 
+const tsconfig = {
+  noEmitOnError: false,
+  exclude: ['src/**/*.spec.ts', 'src/.jest'],
+};
+
 export default [
   {
     external: [
@@ -48,15 +56,17 @@ export default [
       ...Object.keys(appManifest.devDependencies),
     ].filter((moduleName) => moduleName !== '@bugsnag/js'),
     input: 'src/rootWindow.ts',
+    preserveEntrySignatures: 'strict',
     plugins: [
       json(),
       replace({
-        'process.env.BUGSNAG_API_KEY': JSON.stringify(process.env.BUGSNAG_API_KEY),
+        'process.env.BUGSNAG_API_KEY': JSON.stringify(
+          process.env.BUGSNAG_API_KEY
+        ),
         'process.env.NODE_ENV': JSON.stringify(NODE_ENV),
+        'preventAssignment': true,
       }),
-      typescript({
-        noEmitOnError: false,
-      }),
+      typescript(tsconfig),
       babel({
         babelHelpers: 'bundled',
       }),
@@ -81,10 +91,13 @@ export default [
     plugins: [
       json(),
       replace({
-        'process.env.BUGSNAG_API_KEY': JSON.stringify(process.env.BUGSNAG_API_KEY),
+        'process.env.BUGSNAG_API_KEY': JSON.stringify(
+          process.env.BUGSNAG_API_KEY
+        ),
         'process.env.NODE_ENV': JSON.stringify(NODE_ENV),
+        'preventAssignment': true,
       }),
-      typescript({ noEmitOnError: false }),
+      typescript(tsconfig),
       babel({
         babelHelpers: 'bundled',
       }),
@@ -107,8 +120,9 @@ export default [
       json(),
       replace({
         'process.env.NODE_ENV': JSON.stringify(NODE_ENV),
+        'preventAssignment': true,
       }),
-      typescript({ noEmitOnError: false }),
+      typescript(tsconfig),
       babel({
         babelHelpers: 'bundled',
       }),
@@ -141,10 +155,13 @@ export default [
       }),
       json(),
       replace({
-        'process.env.BUGSNAG_API_KEY': JSON.stringify(process.env.BUGSNAG_API_KEY),
+        'process.env.BUGSNAG_API_KEY': JSON.stringify(
+          process.env.BUGSNAG_API_KEY
+        ),
         'process.env.NODE_ENV': JSON.stringify(NODE_ENV),
+        'preventAssignment': true,
       }),
-      typescript({ noEmitOnError: false }),
+      typescript(tsconfig),
       babel({
         babelHelpers: 'bundled',
       }),
